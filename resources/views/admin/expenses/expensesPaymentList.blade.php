@@ -1,0 +1,107 @@
+@extends('layouts.main')
+@push('page_title')
+    <title>Payment History</title>
+@endpush
+@section('content_page')
+    {{-- search --}}
+    <div class="mx-4 my-3 relative flex justify-between items-end gap-3">
+        <form id="search-form" class="flex flex-1 items-center space-x-2">
+            @csrf
+            <div>
+                <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                <input type="date" id="start_date" name="start_date" class="mt-1 p-2 border rounded w-full"
+                    value="{{ request('start_date') }}">
+            </div>
+            <!-- End Date -->
+            <div>
+                <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
+                <input type="date" id="end_date" name="end_date" class="mt-1 p-2 border rounded w-full"
+                    value="{{ request('end_date') }}">
+            </div>
+            <div>
+
+            </div>
+            <!-- Search Input (fills remaining space) -->
+            <input type="text" id="invoice_id" name="search" placeholder="Search using customer details"
+                class="p-2 border rounded flex-1 bg-white mt-6"
+                @isset($search)
+                    value="{{ $search }}"
+                @endisset>
+
+            <!-- Search Button -->
+                <button type="submit"
+                    class=" mt-6 text-white bg-gradient-to-r from-green-400 via-green-500 to-green-600 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-green-300 dark:focus:ring-green-800 px-4 py-2 rounded">
+                    Search
+                </button>
+
+                <!-- Reset Button -->
+                <a href="{{ route('emi.list') }}"
+                    class="mt-6 text-gray-900 bg-gradient-to-r from-lime-200 via-lime-400 to-lime-500 hover:bg-gradient-to-br focus:ring-4 focus:outline-none focus:ring-lime-300 dark:focus:ring-lime-800 px-4 py-2 rounded">
+                    Reset
+                </a>
+        </form>
+    </div>
+
+    <!-- Total Sale Amount -->
+    @if (isset($totalSaleAmount))
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+            <strong>Total Purchase Amount:</strong> {{ $totalSaleAmount }}
+        </div>
+    @endif
+
+    <hr class="border-gray-300 mb-4">
+    <!-- Search Form -->
+
+    <!-- Table Section -->
+    <div>
+        <h2 class="text-lg font-semibold mb-2">View Payment Master</h2> <!-- Subheading for Table -->
+        <div class="bg-white p-4 rounded shadow overflow-x-auto">
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="bg-gray-800 text-white">
+                        <th class="py-2 px-4 border">Sl</th>
+                        <th class="py-2 px-4 border">Type</th>
+                        <th class="py-2 px-4 border">Amount</th>
+                        <th class="py-2 px-4 border">Method</th>
+                        <th class="py-2 px-4 border">Date</th>
+                        <th class="py-2 px-4 border">Remark</th>
+                        {{-- <th class="py-2 px-4 border">Details</th> --}}
+                    </tr>
+                </thead>
+                <tbody>
+                    @php
+                        $i = 1;
+                    @endphp
+                    @foreach ($payments as $key => $item)
+                        <tr class="border">
+                            <td class="py-2 px-4 border">{{ $i }}</td>
+                            <td class="py-2 px-4 border">{{ $item->expenses->name }}</td>
+                            <td class="py-2 px-4 border">{{ $item->amount }}</td>
+                            <td class="py-2 px-4 border">{{ $item->method }}</td>
+                            <td class="py-2 px-4 border">{{ $item->payment_date->format('d/M/y') }}</td>
+                            <td class="py-2 px-4 border">
+                                {{ $item->remark }}
+                            </td>
+                            {{-- <td class="flex justify-center ">
+                                <a id="action" href="{{ route('purchase.show', ['id' => $item->id]) }}"><button
+                                        class="mt-1 bg-green-800 text-white px-3 py-1 rounded hover:bg-red-700"><i
+                                            class="fa-solid fa-circle-info"></i></button></a>
+                            </td> --}}
+                        </tr>
+                        @php
+                            $i++;
+                        @endphp
+                    @endforeach
+                    @if ($i == 1)
+                        <td class="text-red-600">No records found !</td>
+                    @endif
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="m-4">
+        {{ $payments->links() }}
+    </div>
+@endsection
+@push('extra_js')
+@endpush

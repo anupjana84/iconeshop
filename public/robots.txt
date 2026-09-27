@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Block admin / sensitive areas
+Disallow: /admin/
+Disallow: /login/
+Disallow: /dashboard/
+Disallow: /cgi-bin/
+Disallow: /tmp/
+Disallow: /private/
+Disallow: /wp-admin/
+Disallow: /wp-login.php
