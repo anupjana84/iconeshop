@@ -17,6 +17,7 @@ use App\Models\PointsHistories;
 use App\Models\Product;
 use App\Models\ProductDetails;
 use App\Models\RewardPoint;
+use App\Models\RewardPointTransaction;
 use App\Models\Salesmen;
 use App\Models\ServiceCall;
 use App\Models\User;
@@ -28,6 +29,7 @@ use Exception;
 use Hash;
 use Http;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Storage;
 use Validator;
 
@@ -255,6 +257,42 @@ class HomeController extends Controller
             ], 404);
         }
     }
+    public function fetchSpecialOfferProducts() // /fetchSpecialOfferProducts or /special-offers
+    {
+        $now = now();
+
+        $products = Product::with(['category', 'brand', 'details', 'specialOffer.freeProduct.details', 'freeProduct.details'])
+            ->where('online_price', '>', 0)
+            ->where('stock', '>', 0)
+            ->whereHas('details', function ($q) {
+                $q->where('status', '=', 1);
+            })
+            ->where(function ($q) use ($now) {
+                $q->whereHas('specialOffer', function ($soQ) use ($now) {
+                    $soQ->where('is_active', true)
+                        ->where('start_date', '<=', $now)
+                        ->where('end_date', '>=', $now);
+                })
+                ->orWhere(function ($subQ) {
+                    $subQ->where('special_offer', 'yes')
+                        ->whereDoesntHave('specialOffer');
+                });
+            })
+            ->latest()
+            ->get();
+
+        if (count($products) > 0) {
+            return response()->json([
+                'success' => true,
+                'data' => $products
+            ], 200);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'No special offer products found.'
+            ], 404);
+        }
+    }
     public function search(Request $request)
     {
         $request->validate([
@@ -440,7 +478,7 @@ class HomeController extends Controller
             $product->save();
 
             $response = [
-                'status' => 1,
+                'status' => 'success',
                 'message' => 'Thumbnail image add successfully',
                 'thumbnail_image' => $details->thumbnail_image,
             ];
@@ -465,7 +503,7 @@ class HomeController extends Controller
                 $details->save();
             }
             $response = [
-                'status' => 1,
+                'status' => 'success',
                 'message' => 'Thumbnail image add successfully',
                 'thumbnail_image' => $details->thumbnail_image,
             ];
@@ -1606,5 +1644,645 @@ class HomeController extends Controller
                 $data = collect();
         }
         return response()->json($data);
+    }
+
+    public function checkPhone(Request $request, $phone = null)
+    {
+        $inputPhone = $phone ?? $request->input('phone') ?? $request->query('phone') ?? $request->query('mobile');
+
+        if (!$inputPhone) {
+            return response()->json([
+                'status' => 0,
+                'found' => false,
+                'message' => 'Phone number is required.'
+            ], 422);
+        }
+
+        $cleanPhone = preg_replace('/\D/', '', $inputPhone);
+        if (strlen($cleanPhone) > 10) {
+            $cleanPhone = substr($cleanPhone, -10);
+        }
+
+        $customer = Customer::where('phone', $cleanPhone)
+            ->orWhere('phone', $inputPhone)
+            ->orWhere('wpnumber', $cleanPhone)
+            ->orWhere('wpnumber', $inputPhone)
+            ->first();
+
+        if (!$customer) {
+            return response()->json([
+                'status' => 0,
+                'found' => false,
+                'message' => 'No customer found.'
+            ], 200);
+        }
+
+        return response()->json([
+            'status' => 1,
+            'found' => true,
+            'data' => [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'whatsapp' => $customer->wpnumber,
+                'district' => $customer->dist,
+                'pincode' => $customer->pin,
+                'address' => $customer->address,
+                'state' => $customer->state ?? '',
+            ]
+        ], 200);
+    }
+
+    public function sendOtp(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'phone' => ['required', 'digits:10'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Validation error',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $phone = $request->phone;
+        $otp = (string) rand(1000, 9999);
+
+        Cache::put('otp_' . $phone, $otp, 600);
+
+        $message = "*IconComputer* 💻\nYour verification code is: *{$otp}*\nValid for 10 minutes.";
+        $number = '91' . $phone;
+
+        try {
+            $response = Http::connectTimeout(3)->timeout(6)->get(
+                'https://nextsms.co.in/api/whatsapp/send',
+                [
+                    'receiver' => $number,
+                    'msgtext' => $message,
+                    'token' => config('services.whatsapp.token'),
+                ]
+            );
+
+            $resData = $response->json();
+            if (!$response->successful() || (is_array($resData) && isset($resData['status']) && $resData['status'] === 'error')) {
+                $errorMsg = $resData['message'] ?? 'WhatsApp Gateway response error';
+                \Log::error("WhatsApp OTP send failed for {$number}: {$errorMsg}");
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'WhatsApp Gateway Error: ' . $errorMsg
+                ], 500);
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Direct WhatsApp OTP send failed: ' . $e->getMessage());
+            return response()->json([
+                'status' => 0,
+                'message' => 'Failed to send OTP via WhatsApp: ' . $e->getMessage()
+            ], 500);
+        }
+
+        return response()->json([
+            'status' => 1,
+            'message' => 'OTP sent to your WhatsApp number successfully.'
+        ], 200);
+    }
+
+    public function verifyOtp(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'phone' => ['required', 'digits:10'],
+            'otp' => ['required', 'digits:4'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Validation error',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $phone = $request->phone;
+        $otp = $request->otp;
+
+        $cachedOtp = Cache::get('otp_' . $phone);
+
+        if ($cachedOtp && (string) $cachedOtp === (string) $otp) {
+            Cache::put('verified_phone_' . $phone, true, 600);
+            return response()->json([
+                'status' => 1,
+                'message' => 'WhatsApp number verified successfully.'
+            ], 200);
+        }
+
+        return response()->json([
+            'status' => 0,
+            'message' => 'Invalid or expired OTP. Please try again.'
+        ], 422);
+    }
+
+    public function guestOrder(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'phone' => 'required_without:mobile|nullable|digits:10',
+            'mobile' => 'required_without:phone|nullable|digits:10',
+            'whatsapp' => 'nullable|digits:10',
+            'wpnumber' => 'nullable|digits:10',
+            'address' => 'required|string|max:255',
+            'district' => 'nullable|string|max:100',
+            'dist' => 'nullable|string|max:100',
+            'pincode' => 'nullable|digits:6',
+            'pin' => 'nullable|digits:6',
+            'cart' => 'required_without:items',
+            'items' => 'required_without:cart',
+            'delivery' => 'nullable',
+            'otp' => 'nullable|digits:4',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 0,
+                'success' => false,
+                'message' => 'Validation Error',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $userPhone = (string) ($request->phone ?? $request->mobile);
+            $userWhatsapp = (string) ($request->whatsapp ?? $request->wpnumber ?? $userPhone);
+            $userDistrict = (string) ($request->district ?? $request->dist ?? '');
+            $userPincode = (string) ($request->pincode ?? $request->pin ?? '');
+
+            $rawCart = $request->cart ?? $request->items;
+            $cart = is_string($rawCart) ? json_decode($rawCart, true) : $rawCart;
+
+            if (!is_array($cart) || empty($cart)) {
+                return response()->json([
+                    'status' => 0,
+                    'success' => false,
+                    'message' => 'Cart item format is invalid or empty.'
+                ], 422);
+            }
+
+            // Customer record find or create
+            $customer = Customer::where('phone', $userPhone)
+                ->orWhere('phone', $userWhatsapp)
+                ->orWhere('wpnumber', $userPhone)
+                ->orWhere('wpnumber', $userWhatsapp)
+                ->first();
+
+            if (!$customer) {
+                $isVerified = Cache::get('verified_phone_' . $userPhone, false);
+                if (!$isVerified && $request->filled('otp')) {
+                    $cachedOtp = Cache::get('otp_' . $userPhone);
+                    if ($cachedOtp && (string) $cachedOtp === (string) $request->otp) {
+                        $isVerified = true;
+                    }
+                }
+
+                // If OTP not provided or skipped, auto-verify for mobile API order placement
+                $customer = new Customer();
+                $customer->name = $request->name;
+                $customer->phone = $userPhone;
+                $customer->wpnumber = $userWhatsapp;
+                $customer->address = $request->address;
+                $customer->dist = $userDistrict;
+                $customer->pin = $userPincode;
+                $customer->save();
+            } else {
+                $customer->name = $request->name;
+                $customer->wpnumber = $userWhatsapp;
+                $customer->address = $request->address;
+                $customer->dist = $userDistrict;
+                $customer->pin = $userPincode;
+                $customer->save();
+            }
+
+            // Create or get user account for first-time customer
+            $user = User::where('phone', $userPhone)
+                ->orWhere('phone', $userWhatsapp)
+                ->orWhere('wpnumber', $userPhone)
+                ->orWhere('wpnumber', $userWhatsapp)
+                ->first();
+
+            $isNewUser = false;
+            $generatedPassword = null;
+
+            if (!$user) {
+                $generatedPassword = (string) rand(100000, 999999);
+                $user = User::create([
+                    'name' => $request->name,
+                    'phone' => $userPhone,
+                    'wpnumber' => $userWhatsapp,
+                    'password' => Hash::make($generatedPassword),
+                    'role' => 'user',
+                    'status' => 'active',
+                ]);
+                $isNewUser = true;
+            }
+
+            $isDelivery = in_array(strtolower((string)$request->delivery), ['yes', '1', 'true']);
+
+            $order = new Order();
+            $order->customer_id = $customer->id;
+            $order->order_status = 'pending';
+            if ($isDelivery) {
+                $order->delivery_charges = '1';
+            }
+            $order->source = 'Mobile API';
+            $order->save();
+
+            foreach ($cart as $item) {
+                $productId = $item['id'] ?? $item['product_id'] ?? null;
+                $quantity = $item['qty'] ?? $item['quantity'] ?? 1;
+
+                if ($productId) {
+                    $product = Product::find($productId);
+                    if ($product) {
+                        $effectivePrice = (float) ($product->online_price ?: $product->price ?: 0);
+
+                        $orderItem = new OrderItem();
+                        $orderItem->order_id = $order->id;
+                        $orderItem->product_id = $product->id;
+                        $orderItem->quantity = $quantity;
+                        $orderItem->price = $effectivePrice;
+                        $orderItem->delivery_charges = $isDelivery ? (($product->delivery_charges_amount ?: 0) * $quantity) : 0;
+                        $orderItem->total = ($effectivePrice * $quantity) + $orderItem->delivery_charges;
+                        $orderItem->gst = $product->category->gst ?? 0;
+                        $orderItem->save();
+                    }
+                }
+            }
+
+            Cache::forget('verified_phone_' . $userPhone);
+
+            // Send WhatsApp Notification with Order Details & Account Credentials
+            $message = "*Hi {$request->name}!* 👋\n\n"
+                . "Your order has been placed successfully via IconComputer App.\n"
+                . "*Order ID:* #{$order->id}\n\n";
+
+            if ($isNewUser && $generatedPassword) {
+                $message .= "🔑 *Your Account Credentials:*\n"
+                    . "*User ID / Phone:* {$userPhone}\n"
+                    . "*Password:* {$generatedPassword}\n"
+                    . "_Use these details to log in to our Mobile App or Website!_\n\n";
+            }
+
+            $message .= "We will contact you soon.\n"
+                . "এই অর্ডারটি ৩ দিনের (৭২ ঘন্টা) জন্য গ্রহণযোগ্য হবে।\n"
+                . "_Thank you for shopping with us!_\n\n"
+                . "*Team IconComputer* 💻";
+
+            $cleanWhatsapp = preg_replace('/\D/', '', $userWhatsapp);
+            if (strlen($cleanWhatsapp) > 10) {
+                $cleanWhatsapp = substr($cleanWhatsapp, -10);
+            }
+            $number = '91' . $cleanWhatsapp;
+
+            try {
+                Http::connectTimeout(3)->timeout(6)->get(
+                    'https://nextsms.co.in/api/whatsapp/send',
+                    [
+                        'receiver' => $number,
+                        'msgtext' => $message,
+                        'token' => config('services.whatsapp.token'),
+                    ]
+                );
+            } catch (\Throwable $notificationException) {
+                \Log::warning('Direct WhatsApp Order message failed, fallback to queue: ' . $notificationException->getMessage());
+                SendWhatsappMessage::dispatch($number, $message);
+            }
+
+            $token = $user->createToken("API Token")->plainTextToken;
+
+            return response()->json([
+                'status' => 1,
+                'success' => true,
+                'message' => 'Order placed successfully.',
+                'order_id' => $order->id,
+                'is_new_user' => $isNewUser,
+                'user_id' => $user->id,
+                'user_phone' => $user->phone,
+                'credentials' => $isNewUser ? [
+                    'user_id' => $user->phone,
+                    'password' => $generatedPassword
+                ] : null,
+                'token' => $token,
+                'token_type' => 'bearer',
+                'result' => $user,
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status' => 0,
+                'success' => false,
+                'message' => 'Failed to place order: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Helper to resolve User, Customer and Phone number from route parameter (User ID or Phone), request inputs, or Sanctum Auth user.
+     */
+    private function resolveUserAndPhone(Request $request, $idOrPhone = null)
+    {
+        $param = $idOrPhone
+            ?? $request->query('user_id')
+            ?? $request->query('id')
+            ?? $request->query('phone')
+            ?? $request->query('mobile')
+            ?? $request->input('user_id')
+            ?? $request->input('id')
+            ?? $request->input('phone')
+            ?? $request->input('mobile');
+
+        $user = null;
+        $customer = null;
+        $userPhone = null;
+
+        if ($param) {
+            // 1. Check if $param is numeric ID and User / Customer exists
+            if (is_numeric($param) && strlen((string)$param) <= 8) {
+                $user = User::find($param);
+                if ($user) {
+                    $userPhone = $user->phone ?? $user->wpnumber;
+                }
+                $customer = Customer::find($param);
+                if (!$userPhone && $customer) {
+                    $userPhone = $customer->phone ?? $customer->wpnumber;
+                }
+            }
+
+            // 2. If phone/user not resolved yet, search User / Customer by phone number string
+            if (!$userPhone) {
+                $clean = preg_replace('/\D/', '', $param);
+                if (strlen($clean) > 10) {
+                    $clean = substr($clean, -10);
+                }
+
+                $user = User::where('phone', $param)
+                    ->orWhere('phone', $clean)
+                    ->orWhere('wpnumber', $param)
+                    ->orWhere('wpnumber', $clean)
+                    ->first();
+
+                if ($user) {
+                    $userPhone = $user->phone ?? $user->wpnumber;
+                } else {
+                    $userPhone = $param; // fallback to raw string as phone
+                }
+            }
+        }
+
+        // 3. Fallback to Authenticated Sanctum User
+        if (!$userPhone) {
+            $authUser = $request->user() ?? Auth::guard('sanctum')->user() ?? Auth::user();
+            if ($authUser) {
+                $user = $authUser;
+                $userPhone = $user->phone ?? $user->wpnumber;
+            }
+        }
+
+        // Resolve Customer if not resolved yet
+        if ($userPhone && !$customer) {
+            $cleanPhone = preg_replace('/\D/', '', $userPhone);
+            if (strlen($cleanPhone) > 10) {
+                $cleanPhone = substr($cleanPhone, -10);
+            }
+            $customer = Customer::where('phone', $userPhone)
+                ->orWhere('phone', $cleanPhone)
+                ->orWhere('wpnumber', $userPhone)
+                ->orWhere('wpnumber', $cleanPhone)
+                ->first();
+        }
+
+        return [
+            'user' => $user,
+            'customer' => $customer,
+            'phone' => $userPhone
+        ];
+    }
+
+    /**
+     * Get Complete User Dashboard Data for Mobile App (User Info, Reward Points, Orders Summary)
+     */
+    public function getUserDashboard(Request $request, $idOrPhone = null)
+    {
+        $resolved = $this->resolveUserAndPhone($request, $idOrPhone);
+        $user = $resolved['user'];
+        $customer = $resolved['customer'];
+        $userPhone = $resolved['phone'];
+
+        if (!$userPhone && !$user && !$customer) {
+            return response()->json([
+                'status' => 0,
+                'success' => false,
+                'message' => 'User ID, phone number or authenticated user session is required.'
+            ], 422);
+        }
+
+        $cleanPhone = $userPhone ? preg_replace('/\D/', '', $userPhone) : '';
+        if (strlen($cleanPhone) > 10) {
+            $cleanPhone = substr($cleanPhone, -10);
+        }
+
+        // 1. Fetch User / Customer Details
+        $userData = [
+            'id' => $user ? $user->id : ($customer ? $customer->id : null),
+            'name' => $user ? $user->name : ($customer ? $customer->name : 'Customer'),
+            'phone' => $userPhone ?? ($user->phone ?? $customer->phone ?? null),
+            'whatsapp' => $customer->wpnumber ?? $user->wpnumber ?? $userPhone,
+            'role' => $user->role ?? 'customer',
+            'address' => $customer->address ?? null,
+            'district' => $customer->dist ?? null,
+            'pincode' => $customer->pin ?? $customer->pincode ?? null,
+        ];
+
+        // 2. Fetch Reward Point & Recent Transactions
+        $reward = null;
+        $recentTransactions = collect();
+
+        if ($userPhone || $cleanPhone) {
+            $reward = RewardPoint::where('mobile', $cleanPhone)
+                ->orWhere('mobile', $userPhone)
+                ->first();
+
+            $recentTransactions = RewardPointTransaction::where('mobile', $cleanPhone)
+                ->orWhere('mobile', $userPhone)
+                ->latest()
+                ->take(5)
+                ->get();
+        }
+
+        $rewardData = [
+            'balance' => $reward ? (float)$reward->balance : 0,
+            'total_earned' => $reward ? (float)$reward->total_earned : 0,
+            'total_used' => $reward ? (float)$reward->total_used : 0,
+            'recent_transactions' => $recentTransactions,
+        ];
+
+        // 3. Fetch Orders & Summary
+        $ordersQuery = Order::with([
+            'customer',
+            'orderItems.product.category',
+            'orderItems.product.brand',
+            'orderItems.product.details',
+            'orderItems.product.specialOffer',
+            'freeGifts.freeProduct.brand'
+        ])
+            ->where(function ($query) use ($customer, $userPhone, $cleanPhone) {
+                if ($customer) {
+                    $query->where('customer_id', $customer->id);
+                }
+                if ($userPhone) {
+                    $query->orWhereHas('customer', function ($q) use ($userPhone, $cleanPhone) {
+                        $q->where('phone', $userPhone)
+                            ->orWhere('phone', $cleanPhone)
+                            ->orWhere('wpnumber', $userPhone)
+                            ->orWhere('wpnumber', $cleanPhone);
+                    });
+                }
+            });
+
+        $totalOrders = (clone $ordersQuery)->count();
+        $pendingOrders = (clone $ordersQuery)->whereIn('order_status', ['pending', 'processing'])->count();
+        $completedOrders = (clone $ordersQuery)->whereIn('order_status', ['delivered', 'completed'])->count();
+        $canceledOrders = (clone $ordersQuery)->whereIn('order_status', ['canceled', 'cancelled'])->count();
+
+        $recentOrders = (clone $ordersQuery)->latest()->take(5)->get();
+
+        $ordersSummary = [
+            'total_orders' => $totalOrders,
+            'pending_orders' => $pendingOrders,
+            'completed_orders' => $completedOrders,
+            'canceled_orders' => $canceledOrders,
+            'recent_orders' => $recentOrders,
+        ];
+
+        return response()->json([
+            'status' => 1,
+            'success' => true,
+            'message' => 'User dashboard data retrieved successfully.',
+            'data' => [
+                'user' => $userData,
+                'reward_points' => $rewardData,
+                'orders_summary' => $ordersSummary,
+            ]
+        ], 200);
+    }
+
+    /**
+     * Get Customer Reward Points & Transaction History (By User ID or Phone)
+     */
+    public function getCustomerRewardPoints(Request $request, $idOrPhone = null)
+    {
+        $resolved = $this->resolveUserAndPhone($request, $idOrPhone);
+        $userPhone = $resolved['phone'];
+
+        if (!$userPhone) {
+            return response()->json([
+                'status' => 0,
+                'success' => false,
+                'message' => 'User ID, phone number or authenticated user session is required.'
+            ], 422);
+        }
+
+        $cleanPhone = preg_replace('/\D/', '', $userPhone);
+        if (strlen($cleanPhone) > 10) {
+            $cleanPhone = substr($cleanPhone, -10);
+        }
+
+        $reward = RewardPoint::where('mobile', $cleanPhone)
+            ->orWhere('mobile', $userPhone)
+            ->first();
+
+        $transactions = RewardPointTransaction::where('mobile', $cleanPhone)
+            ->orWhere('mobile', $userPhone)
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'status' => 1,
+            'success' => true,
+            'message' => 'Reward points data retrieved successfully.',
+            'data' => [
+                'phone' => $userPhone,
+                'reward' => $reward,
+                'balance' => $reward ? (float)$reward->balance : 0,
+                'total_earned' => $reward ? (float)$reward->total_earned : 0,
+                'total_used' => $reward ? (float)$reward->total_used : 0,
+                'transactions' => $transactions,
+            ]
+        ], 200);
+    }
+
+    /**
+     * Get Customer Order History (By User ID or Phone)
+     */
+    public function getCustomerOrders(Request $request, $idOrPhone = null)
+    {
+        $resolved = $this->resolveUserAndPhone($request, $idOrPhone);
+        $customer = $resolved['customer'];
+        $userPhone = $resolved['phone'];
+
+        if (!$userPhone && !$customer) {
+            return response()->json([
+                'status' => 0,
+                'success' => false,
+                'message' => 'User ID, phone number or authenticated user session is required.'
+            ], 422);
+        }
+
+        $cleanPhone = $userPhone ? preg_replace('/\D/', '', $userPhone) : '';
+        if (strlen($cleanPhone) > 10) {
+            $cleanPhone = substr($cleanPhone, -10);
+        }
+
+        $query = Order::with([
+            'customer',
+            'orderItems.product.category',
+            'orderItems.product.brand',
+            'orderItems.product.details',
+            'orderItems.product.specialOffer',
+            'freeGifts.freeProduct.brand'
+        ])
+            ->where(function ($q) use ($customer, $userPhone, $cleanPhone) {
+                if ($customer) {
+                    $q->where('customer_id', $customer->id);
+                }
+                if ($userPhone) {
+                    $q->orWhereHas('customer', function ($subQ) use ($userPhone, $cleanPhone) {
+                        $subQ->where('phone', $userPhone)
+                            ->orWhere('phone', $cleanPhone)
+                            ->orWhere('wpnumber', $userPhone)
+                            ->orWhere('wpnumber', $cleanPhone);
+                    });
+                }
+            });
+
+        if ($request->filled('status')) {
+            $status = strtolower($request->input('status'));
+            if ($status === 'pending') {
+                $query->whereIn('order_status', ['pending', 'processing']);
+            } elseif ($status === 'delivered' || $status === 'completed') {
+                $query->whereIn('order_status', ['delivered', 'completed']);
+            } elseif ($status === 'canceled' || $status === 'cancelled') {
+                $query->whereIn('order_status', ['canceled', 'cancelled']);
+            }
+        }
+
+        $orders = $query->latest()->get();
+
+        return response()->json([
+            'status' => 1,
+            'success' => true,
+            'message' => 'Orders retrieved successfully.',
+            'phone' => $userPhone,
+            'total' => count($orders),
+            'data' => $orders
+        ], 200);
     }
 }

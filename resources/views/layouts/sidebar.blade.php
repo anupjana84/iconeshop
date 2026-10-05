@@ -155,6 +155,8 @@
                                 class="block px-4 py-2 hover:bg-gray-600 rounded max-h-10">Add Product</a></li>
                         <li><a href="{{ route('product.list') }}"
                                 class="block px-4 py-2 hover:bg-gray-600 rounded max-h-10">Product List</a></li>
+                        <li><a href="{{ route('product.special.offers') }}"
+                                class="block px-4 py-2 hover:bg-gray-600 rounded max-h-10 text-amber-300 font-semibold flex items-center gap-1.5"><i class="fas fa-fire text-rose-500"></i> Special Offers</a></li>
                         <li><a href="{{ route('product.code') }}"
                                 class="block px-4 py-2 hover:bg-gray-600 rounded max-h-10">Product Code</a></li>
                         <li><a href="{{ route('product.empty.stock') }}"

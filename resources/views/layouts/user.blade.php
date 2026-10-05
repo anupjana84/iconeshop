@@ -95,7 +95,12 @@
 
 <body class="bg-gray-100 min-h-screen">
     <header class="bg-blue-700 text-white px-5 py-4 flex items-center justify-between">
-        <a href="{{ route('userdashboard') }}" class="font-bold text-lg">User Dashboard</a>
+        <div class="flex items-center gap-4">
+            <a href="{{ route('home') }}" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-2 border border-blue-400">
+                <i class="fas fa-store"></i> Store Home
+            </a>
+            <a href="{{ route('userdashboard') }}" class="font-bold text-lg">User Dashboard</a>
+        </div>
         <form action="{{ route('logout') }}" method="POST">
             @csrf
             <button type="submit" class="user-logout">
@@ -107,9 +112,10 @@
 
     <div class="user-shell">
         <aside class="user-menu" aria-label="User menu">
-            <a href="{{ route('userdashboard') }}">🏠 Dashboard</a>
-            <a href="{{ route('userdashboard') }}#my-orders">📦 My Orders</a>
-            <a href="{{ route('user.service') }}" class="active">🛠️ Service</a>
+            <a href="{{ route('userdashboard') }}#overview">🏠 Overview</a>
+            <a href="{{ route('userdashboard') }}#rewards">🏆 My Rewards</a>
+            <a href="{{ route('userdashboard') }}#orders">📦 My Orders</a>
+            <a href="{{ route('user.service') }}" class="{{ request()->routeIs('user.service*') ? 'active' : '' }}">🛠️ Service</a>
         </aside>
 
         <main class="user-content">

@@ -14,7 +14,7 @@ class User extends Authenticatable
 
     protected $table = 'users';
     protected $primaryKey = 'id';
-    protected $fillable = ['name', 'phone', 'wpnumber', 'password', 'role',  'remember_token'];
+    protected $fillable = ['name', 'email', 'phone', 'wpnumber', 'password', 'role', 'remember_token'];
 
     protected $hidden = [
         'password',

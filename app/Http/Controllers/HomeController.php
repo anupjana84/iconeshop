@@ -24,7 +24,13 @@ class HomeController extends Controller
         $page_title = 'User Dashboard';
         $userPhone = auth()->user()->phone;
 
-        $orders = Order::with('orderItems.product')
+        $orders = Order::with([
+            'orderItems.product.category',
+            'orderItems.product.brand',
+            'orderItems.product.details',
+            'orderItems.product.specialOffer',
+            'freeGifts.freeProduct.brand'
+        ])
             ->whereHas('customer', function ($query) use ($userPhone) {
                 $query->where('phone', $userPhone);
             })
@@ -75,7 +81,7 @@ class HomeController extends Controller
         $number = '91' . $phone;
 
         try {
-            Http::connectTimeout(2)->timeout(5)->get(
+            $response = Http::connectTimeout(3)->timeout(6)->get(
                 'https://nextsms.co.in/api/whatsapp/send',
                 [
                     'receiver' => $number,
@@ -83,8 +89,18 @@ class HomeController extends Controller
                     'token' => config('services.whatsapp.token'),
                 ]
             );
+
+            $resData = $response->json();
+            if (!$response->successful() || (is_array($resData) && isset($resData['status']) && $resData['status'] === 'error')) {
+                $errorMsg = $resData['message'] ?? 'WhatsApp Gateway response error';
+                \Log::error("WhatsApp OTP send failed for {$number}: {$errorMsg}");
+                return response()->json([
+                    'success' => false,
+                    'message' => 'WhatsApp Gateway Error: ' . $errorMsg
+                ], 500);
+            }
         } catch (\Throwable $e) {
-            \Log::warning('WhatsApp OTP send failed: ' . $e->getMessage());
+            \Log::error('WhatsApp OTP Exception: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to send OTP via WhatsApp. Please check number and try again.'
@@ -300,6 +316,8 @@ class HomeController extends Controller
 
     public function home(Request $request)
     {
+        $now = now();
+
         $topProducts = Product::with(['category', 'brand', 'details', 'specialOffer.freeProduct', 'freeProduct'])
             ->whereNotNull('details_id')
             ->where('online_price', '>', 0)
@@ -309,21 +327,100 @@ class HomeController extends Controller
                 $query->where('display', 'top');
             })->get();
 
+        // Active Special Offer Products
+        $specialOfferProducts = Product::with(['category', 'brand', 'details', 'specialOffer.freeProduct.details', 'freeProduct.details'])
+            ->where('online_price', '>', 0)
+            ->where('stock', '>', 0)
+            ->whereHas('details', function ($q) {
+                $q->where('status', '=', 1);
+            })
+            ->where(function ($q) use ($now) {
+                $q->whereHas('specialOffer', function ($soQ) use ($now) {
+                    $soQ->where('is_active', true)
+                        ->where('start_date', '<=', $now)
+                        ->where('end_date', '>=', $now);
+                })
+                ->orWhere(function ($subQ) {
+                    $subQ->where('special_offer', 'yes')
+                        ->whereDoesntHave('specialOffer');
+                });
+            })
+            ->latest()
+            ->get();
+
+        // Active Free Gift Products
+        $freeGiftProducts = Product::with(['category', 'brand', 'details', 'specialOffer.freeProduct.details', 'freeProduct.details'])
+            ->where('online_price', '>', 0)
+            ->where('stock', '>', 0)
+            ->whereHas('details', function ($q) {
+                $q->where('status', '=', 1);
+            })
+            ->where(function ($q) use ($now) {
+                $q->whereNotNull('free_product_id')
+                    ->orWhere(function ($sub) {
+                        $sub->whereNotNull('free_gift')->where('free_gift', '!=', '');
+                    })
+                    ->orWhereHas('specialOffer', function ($soQ) use ($now) {
+                        $soQ->where('is_active', true)
+                            ->where('offer_type', 'free_product')
+                            ->where('start_date', '<=', $now)
+                            ->where('end_date', '>=', $now);
+                    });
+            })
+            ->latest()
+            ->get();
+
         // Base query
-        $query = Product::with(['details', 'category', 'brand', 'specialOffer.freeProduct', 'freeProduct'])
+        $query = Product::with(['details', 'category', 'brand', 'specialOffer.freeProduct.details', 'freeProduct.details'])
             ->where('online_price', '>', 0)
             ->where('stock', '>', 0)
             ->whereHas('details', function ($q) {
                 $q->where('status', '=', 1);
             })->latest(); // Default sorting
 
+        // Selected Category details
+        $selectedCategory = null;
+
         // 1️⃣ Category filter (from category bar)
         if ($request->filled('category')) {
             $categoryId = $request->category;
+            $selectedCategory = Category::find($categoryId);
+
             $query->where(function ($q) use ($categoryId) {
                 $q->where('category_id', $categoryId)
                     ->orWhereHas('category', function ($subQ) use ($categoryId) {
                         $subQ->where('name', 'like', "%{$categoryId}%");
+                    });
+            });
+        }
+
+        // Special Offer filter
+        if ($request->filled('special_offer') && $request->special_offer == '1') {
+            $query->where(function ($q) use ($now) {
+                $q->whereHas('specialOffer', function ($soQ) use ($now) {
+                    $soQ->where('is_active', true)
+                        ->where('start_date', '<=', $now)
+                        ->where('end_date', '>=', $now);
+                })
+                ->orWhere(function ($subQ) {
+                    $subQ->where('special_offer', 'yes')
+                        ->whereDoesntHave('specialOffer');
+                });
+            });
+        }
+
+        // Free Gift filter
+        if ($request->filled('free_gift') && $request->free_gift == '1') {
+            $query->where(function ($q) use ($now) {
+                $q->whereNotNull('free_product_id')
+                    ->orWhere(function ($sub) {
+                        $sub->whereNotNull('free_gift')->where('free_gift', '!=', '');
+                    })
+                    ->orWhereHas('specialOffer', function ($soQ) use ($now) {
+                        $soQ->where('is_active', true)
+                            ->where('offer_type', 'free_product')
+                            ->where('start_date', '<=', $now)
+                            ->where('end_date', '>=', $now);
                     });
             });
         }
@@ -340,6 +437,7 @@ class HomeController extends Controller
 
                     $q->where(function ($subQ) use ($term) {
                         $subQ->where('model', 'like', "%{$term}%")
+                            ->orWhere('free_gift', 'like', "%{$term}%")
                             ->orWhereHas('brand', function ($brandQ) use ($term) {
                                 $brandQ->where('name', 'like', "%{$term}%");
                             })
@@ -348,6 +446,18 @@ class HomeController extends Controller
                             })
                             ->orWhereHas('category', function ($catQ) use ($term) {
                                 $catQ->where('name', 'like', "%{$term}%");
+                            })
+                            ->orWhereHas('freeProduct', function ($fpQ) use ($term) {
+                                $fpQ->where('model', 'like', "%{$term}%")
+                                    ->orWhereHas('brand', function ($bQ) use ($term) {
+                                        $bQ->where('name', 'like', "%{$term}%");
+                                    });
+                            })
+                            ->orWhereHas('specialOffer.freeProduct', function ($sofpQ) use ($term) {
+                                $sofpQ->where('model', 'like', "%{$term}%")
+                                    ->orWhereHas('brand', function ($bQ) use ($term) {
+                                        $bQ->where('name', 'like', "%{$term}%");
+                                    });
                             });
                     });
                 }
@@ -372,7 +482,7 @@ class HomeController extends Controller
         }
 
         // 6️⃣ Normal page load
-        return view('home', compact('products', 'catagories', 'topProducts'));
+        return view('home', compact('products', 'catagories', 'topProducts', 'specialOfferProducts', 'freeGiftProducts', 'selectedCategory'));
     }
 
     public function contact()

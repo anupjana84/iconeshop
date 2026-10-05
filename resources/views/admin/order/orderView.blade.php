@@ -6,7 +6,7 @@
     <div>
         <form id="search-form" class="mb-6" method="GET">
             <div class="flex flex-wrap items-center gap-2">
-                <input type="search" id="invoice_id" name="search" placeholder="Search using customer information"
+                <input type="search" id="invoice_id" name="search" placeholder="Search using customer info or product code"
                     class="p-2 border rounded-l w-full sm:flex-1 min-w-[250px]"
                     @isset($search)
                         value="{{ $search }}"
@@ -78,62 +78,136 @@
         <div class="bg-white p-4 rounded shadow overflow-x-auto">
             <table class="w-full border-collapse">
                 <thead>
-                    <tr class="bg-gray-800 text-white">
-                        <th class="py-2 px-4 border">Sl</th>
-                        <th class="py-2 px-4 border">Customer</th>
-                        <th class="py-2 px-4 border">Phone Number</th>
-                        <th class="py-2 px-4 border">Reference Number</th>
-                        <th class="py-2 px-4 border">Order Date</th>
-                        <th class="py-2 px-4 border">status</th>
-                        <th class="py-2 px-4 border">Delivery Date</th>
-                        <th class="py-2 px-4 border">Remark</th>
-                        <th class="py-2 px-4 border">Source</th>
-                        <th class="py-2 px-4 border">Action</th>
+                    <tr class="bg-gray-800 text-white text-xs uppercase tracking-wider">
+                        <th class="py-2 px-3 border">Sl</th>
+                        <th class="py-2 px-3 border">Customer</th>
+                        <th class="py-2 px-3 border">Phone Number</th>
+                        <th class="py-2 px-3 border">Reference Number</th>
+                        <th class="py-2 px-3 border">Product Code</th>
+                        <th class="py-2 px-3 border">Order Date</th>
+                        <th class="py-2 px-3 border">Status</th>
+                        <th class="py-2 px-3 border">Free Gift / Offer</th>
+                        <th class="py-2 px-3 border">Delivery Date</th>
+                        <th class="py-2 px-3 border">Remark</th>
+                        <th class="py-2 px-3 border">Source</th>
+                        <th class="py-2 px-3 border">Action</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="text-xs">
                     @php
                         $i = 1;
                     @endphp
                     @foreach ($order as $key => $item)
+                        @php
+                            $giftsList = [];
+                            $offersList = [];
+                            if (isset($item->orderItems)) {
+                                foreach ($item->orderItems as $oItem) {
+                                    $p = $oItem->product ?? null;
+                                    if ($p) {
+                                        $so = $p->specialOffer ?? null;
+                                        if ($so && $so->isCurrentlyActive()) {
+                                            if ($so->offer_type === 'free_product' && $so->freeProduct) {
+                                                $giftsList[] = ($so->freeProduct->brand->name ?? '') . ' ' . $so->freeProduct->model;
+                                            } elseif ($so->offer_type === 'flat') {
+                                                $offersList[] = '₹' . number_format($so->flat_discount, 0) . ' FLAT OFF';
+                                            } elseif ($so->offer_type === 'percentage') {
+                                                $offersList[] = $so->percentage_discount . '% OFF';
+                                            }
+                                        } elseif (!empty($p->free_gift)) {
+                                            $giftsList[] = $p->free_gift;
+                                        }
+                                    }
+                                }
+                            }
+                            $giftsList = array_unique(array_filter($giftsList));
+                            $offersList = array_unique(array_filter($offersList));
+                        @endphp
                         <tr class="border">
                             @if (isset($item->direct_salesman))
-                                <td class="py-2 px-4 border">{{ $i }}</td>
-                                <td class="py-2 px-4 border" colspan="3">Cash Order 
+                                <td class="py-2 px-3 border">{{ $i }}</td>
+                                <td class="py-2 px-3 border" colspan="3">Cash Order 
                                     @isset($item->dealer->name)
                                         
                                     (<span class="text-gray-500">By-</span><small>{{ $item->dealer->name }}</small>)
                                     @endisset
                                 </td>
-
-                                <td class="py-2 px-4 border">{{ $item->created_at->format('d/m/Y') }} </td>
-                                <td class="py-2 px-4 border">
-                                    @if ($item->order_status == 'pending')
-                                        <span
-                                            class="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-sm">Pending</span>
-                                    @elseif($item->order_status == 'delivered')
-                                        <span
-                                            class="bg-green-200 text-green-800 px-2 py-1 rounded-full text-sm">Delivered</span>
-                                    @elseif($item->order_status == 'canceled')
-                                        <span class="bg-red-200 text-red-800 px-2 py-1 rounded-full text-sm">Canceled</span>
+                                <td class="py-2 px-3 border border-gray-300">
+                                    @if (isset($item->orderItems) && count($item->orderItems) > 0)
+                                        <div class="flex flex-col gap-1.5 min-w-[130px]">
+                                            @foreach ($item->orderItems as $oItem)
+                                                @if (isset($oItem->product))
+                                                    <div class="bg-gray-100 border border-gray-300 rounded p-1.5 text-xs shadow-2xs">
+                                                        @if (!empty($oItem->product->code))
+                                                            <div class="flex flex-col items-center justify-center bg-white p-1 rounded border border-gray-200 mb-1">
+                                                                <span class="font-mono font-bold text-gray-900 text-[11px]">
+                                                                    {{ $oItem->product->code }}
+                                                                </span>
+                                                                @if(class_exists('DNS1D'))
+                                                                    <div class="mt-0.5 overflow-hidden">
+                                                                        {!! DNS1D::getBarcodeSVG($oItem->product->code, 'C128', 0.9, 25, 'black') !!}
+                                                                    </div>
+                                                                @endif
+                                                            </div>
+                                                        @endif
+                                                        <div class="text-gray-700 font-medium text-[10px] text-center">
+                                                            {{ $oItem->product->category->name ?? '' }} - {{ $oItem->product->brand->name ?? '' }}
+                                                        </div>
+                                                        <div class="text-gray-900 font-bold text-[11px] text-center">
+                                                            {{ $oItem->product->model ?? '' }}
+                                                        </div>
+                                                    </div>
+                                                @else
+                                                    <span class="text-gray-400 text-xs">N/A</span>
+                                                @endif
+                                            @endforeach
+                                        </div>
                                     @else
-                                        <span
-                                            class="bg-gray-200 text-gray-800 px-2 py-1 rounded-full text-sm">Unknown</span>
+                                        <span class="text-gray-400 text-xs">-</span>
                                     @endif
                                 </td>
-                                <td class="py-2 px-4 border">{{ $item->delivery_date }}</td>
-                                <td class="py-2 px-4 border text-center">
+
+                                <td class="py-2 px-3 border">{{ $item->created_at->format('d/m/Y') }} </td>
+                                <td class="py-2 px-3 border">
+                                    @if ($item->order_status == 'pending')
+                                        <span
+                                            class="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-xs font-bold">Pending</span>
+                                    @elseif($item->order_status == 'delivered')
+                                        <span
+                                            class="bg-green-200 text-green-800 px-2 py-1 rounded-full text-xs font-bold">Delivered</span>
+                                    @elseif($item->order_status == 'canceled')
+                                        <span class="bg-red-200 text-red-800 px-2 py-1 rounded-full text-xs font-bold">Canceled</span>
+                                    @else
+                                        <span
+                                            class="bg-gray-200 text-gray-800 px-2 py-1 rounded-full text-xs font-bold">Unknown</span>
+                                    @endif
+                                </td>
+                                <td class="py-2 px-3 border text-center">
+                                    @if(count($giftsList) > 0)
+                                        <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[11px] font-black px-2 py-0.5 rounded-full shadow-xs">
+                                            🎁 {{ implode(', ', $giftsList) }}
+                                        </span>
+                                    @elseif(count($offersList) > 0)
+                                        <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-black px-2 py-0.5 rounded-full shadow-xs">
+                                            ⚡ {{ implode(', ', $offersList) }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 text-xs">-</span>
+                                    @endif
+                                </td>
+                                <td class="py-2 px-3 border">{{ $item->delivery_date }}</td>
+                                <td class="py-2 px-3 border text-center">
                                     @if (isset($item->notes))
                                         {{ $item->notes }}
                                     @else
                                         --
                                     @endif
                                 </td>
-                                <td class="py-2 px-4 border text-center">
+                                <td class="py-2 px-3 border text-center">
                                                                         
                                     {{ $item->source }}
                                 </td>
-                                <td class="flex justify-center ">
+                                <td class="flex justify-center py-2 px-2 border">
                                     @if ($item->order_status == 'pending')
                                         <a id="action" href="{{ route('order.direct.process', ['id' => $item->id]) }}"><button
                                                 class="mt-1 bg-yellow-600 text-white px-3 py-1 rounded hover:bg-red-700"><i
@@ -146,40 +220,87 @@
                                     @endif
                                 </td>
                             @else
-                                <td class="py-2 px-4 border">{{ $i }}</td>
-                                <td class="py-2 px-4 border">{{ $item->customer->name ?? 'N/A' }}</td>
-                                <td class="py-2 px-4 border">{{ $item->customer->phone ?? 'N/A' }}</td>
-                                <td class="py-2 px-4 border">{{ $item->referral_phone ?? '-' }}</td>
-                                <td class="py-2 px-4 border">{{ $item->created_at->format('d/m/Y') }} </td>
-
-
-                                <td class="py-2 px-4 border">
-                                    @if ($item->order_status == 'pending')
-                                        <span
-                                            class="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-sm">Pending</span>
-                                    @elseif($item->order_status == 'delivered')
-                                        <span
-                                            class="bg-green-200 text-green-800 px-2 py-1 rounded-full text-sm">Delivered</span>
-                                    @elseif($item->order_status == 'canceled')
-                                        <span class="bg-red-200 text-red-800 px-2 py-1 rounded-full text-sm">Canceled</span>
+                                <td class="py-2 px-3 border">{{ $i }}</td>
+                                <td class="py-2 px-3 border font-semibold">{{ $item->customer->name ?? 'N/A' }}</td>
+                                <td class="py-2 px-3 border">{{ $item->customer->phone ?? 'N/A' }}</td>
+                                <td class="py-2 px-3 border">{{ $item->referral_phone ?? '-' }}</td>
+                                <td class="py-2 px-3 border border-gray-300">
+                                    @if (isset($item->orderItems) && count($item->orderItems) > 0)
+                                        <div class="flex flex-col gap-1.5 min-w-[130px]">
+                                            @foreach ($item->orderItems as $oItem)
+                                                @if (isset($oItem->product))
+                                                    <div class="bg-gray-100 border border-gray-300 rounded p-1.5 text-xs shadow-2xs">
+                                                        @if (!empty($oItem->product->code))
+                                                            <div class="flex flex-col items-center justify-center bg-white p-1 rounded border border-gray-200 mb-1">
+                                                                <span class="font-mono font-bold text-gray-900 text-[11px]">
+                                                                    {{ $oItem->product->code }}
+                                                                </span>
+                                                                @if(class_exists('DNS1D'))
+                                                                    <div class="mt-0.5 overflow-hidden">
+                                                                        {!! DNS1D::getBarcodeSVG($oItem->product->code, 'C128', 0.9, 25, 'black') !!}
+                                                                    </div>
+                                                                @endif
+                                                            </div>
+                                                        @endif
+                                                        <div class="text-gray-700 font-medium text-[10px] text-center">
+                                                            {{ $oItem->product->category->name ?? '' }} - {{ $oItem->product->brand->name ?? '' }}
+                                                        </div>
+                                                        <div class="text-gray-900 font-bold text-[11px] text-center">
+                                                            {{ $oItem->product->model ?? '' }}
+                                                        </div>
+                                                    </div>
+                                                @else
+                                                    <span class="text-gray-400 text-xs">N/A</span>
+                                                @endif
+                                            @endforeach
+                                        </div>
                                     @else
-                                        <span
-                                            class="bg-gray-200 text-gray-800 px-2 py-1 rounded-full text-sm">Unknown</span>
+                                        <span class="text-gray-400 text-xs">-</span>
                                     @endif
                                 </td>
-                                <td class="py-2 px-4 border">{{ $item->delivery_date }}</td>
-                                <td class="py-2 px-4 border text-center">
+                                <td class="py-2 px-3 border">{{ $item->created_at->format('d/m/Y') }} </td>
+
+
+                                <td class="py-2 px-3 border">
+                                    @if ($item->order_status == 'pending')
+                                        <span
+                                            class="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-xs font-bold">Pending</span>
+                                    @elseif($item->order_status == 'delivered')
+                                        <span
+                                            class="bg-green-200 text-green-800 px-2 py-1 rounded-full text-xs font-bold">Delivered</span>
+                                    @elseif($item->order_status == 'canceled')
+                                        <span class="bg-red-200 text-red-800 px-2 py-1 rounded-full text-xs font-bold">Canceled</span>
+                                    @else
+                                        <span
+                                            class="bg-gray-200 text-gray-800 px-2 py-1 rounded-full text-xs font-bold">Unknown</span>
+                                    @endif
+                                </td>
+                                <td class="py-2 px-3 border text-center">
+                                    @if(count($giftsList) > 0)
+                                        <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300 text-[11px] font-black px-2 py-0.5 rounded-full shadow-xs">
+                                            🎁 {{ implode(', ', $giftsList) }}
+                                        </span>
+                                    @elseif(count($offersList) > 0)
+                                        <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-black px-2 py-0.5 rounded-full shadow-xs">
+                                            ⚡ {{ implode(', ', $offersList) }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 text-xs">-</span>
+                                    @endif
+                                </td>
+                                <td class="py-2 px-3 border">{{ $item->delivery_date }}</td>
+                                <td class="py-2 px-3 border text-center">
                                     @if (isset($item->notes))
                                         {{ $item->notes }}
                                     @else
                                         --
                                     @endif
                                 </td>
-                                <td class="py-2 px-4 border text-center">
+                                <td class="py-2 px-3 border text-center">
                                     {{ $item->source }}
                                 </td>
 
-                                <td class="flex justify-center ">
+                                <td class="flex justify-center py-2 px-2 border">
                                     @if ($item->order_status == 'pending')
                                         <a id="action" href="{{ route('order.process', ['id' => $item->id]) }}"><button
                                                 class="mt-1 bg-yellow-600 text-white px-3 py-1 rounded hover:bg-red-700"><i

@@ -660,7 +660,7 @@
                         <p id="soModalProductName" class="text-xs text-amber-100 font-medium truncate max-w-xs"></p>
                     </div>
                 </div>
-                <button type="button" onclick="closeSpecialOfferModal()" class="text-amber-100 hover:text-white text-2xl font-bold p-1 rounded-lg hover:bg-white/10 transition-colors">&times;</button>
+                <button type="button" onclick="closeSpecialOfferModal()" class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center font-bold text-2xl leading-none transition-colors shadow-sm cursor-pointer" title="Close Modal">&times;</button>
             </div>
 
             <!-- Modal Body / Form -->
@@ -675,6 +675,46 @@
                         <span id="so_form_alert_msg" class="font-medium"></span>
                     </div>
                     <button type="button" onclick="hideSoFormAlert()" class="text-red-400 hover:text-red-600 text-lg font-bold leading-none">&times;</button>
+                </div>
+
+                <!-- Selected Main Product Display Bar -->
+                <div id="so_selected_product_bar" class="hidden bg-gradient-to-r from-amber-50 via-amber-100/60 to-yellow-50 p-3.5 rounded-xl border border-amber-300 text-xs font-bold text-gray-800 flex items-center gap-2.5 shadow-sm">
+                    <span class="text-xl text-amber-600 flex-shrink-0">📦</span>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-[10px] text-amber-800 uppercase tracking-wider font-extrabold">Main Product / মূল প্রোডাক্ট:</div>
+                        <div id="so_main_product_title" class="text-xs md:text-sm text-gray-900 font-extrabold truncate"></div>
+                    </div>
+                </div>
+
+                <!-- Category & Product Selection (Hidden when main product is pre-selected) -->
+                <div id="so_top_select_block" class="hidden bg-gradient-to-r from-amber-50 to-yellow-50 p-4 rounded-xl border border-amber-200/80 space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                            <span class="text-amber-600">📁</span> Select Category / ক্যাটাগরি <span class="text-red-500">*</span>
+                        </label>
+                        <select id="so_category_id" onchange="filterSoProductSelect(this.value)" class="w-full bg-white border border-amber-300 rounded-xl px-3.5 py-2 text-xs font-semibold focus:ring-2 focus:ring-amber-500">
+                            <option value="">-- All Categories / ক্যাটাগরি বেছে নিন --</option>
+                            @foreach($categories as $cat)
+                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                            <span class="text-amber-600">📦</span> Select Product / প্রোডাক্ট <span class="text-red-500">*</span>
+                        </label>
+                        <select id="so_product_select" onchange="onSoProductSelectChange(this.value)" class="w-full bg-white border border-amber-300 rounded-xl px-3.5 py-2 text-xs font-semibold focus:ring-2 focus:ring-amber-500">
+                            <option value="">-- Select Product / প্রোডাক্ট বেছে নিন --</option>
+                            @if(isset($allProducts))
+                                @foreach($allProducts as $pItem)
+                                    <option value="{{ $pItem->id }}" data-category="{{ $pItem->category_id }}" data-brand="{{ $pItem->brand->name ?? '' }}" data-model="{{ $pItem->model }}" data-price="{{ $pItem->online_price ?: $pItem->sale_price ?: 0 }}">
+                                        {{ $pItem->category->name ?? 'Uncategorized' }} • {{ $pItem->brand->name ?? '' }} {{ $pItem->model }} (₹{{ number_format($pItem->online_price ?: $pItem->sale_price ?: 0, 0) }})
+                                    </option>
+                                @endforeach
+                            @endif
+                        </select>
+                    </div>
                 </div>
 
                 <!-- 1. Offer Type Selection -->
@@ -716,16 +756,34 @@
                     </div>
                 </div>
 
-                <div id="field_free_product" class="hidden">
-                    <label class="block text-xs font-semibold text-gray-700 mb-1">Select Free Product Gift 🎁</label>
-                    <select id="so_free_product_id" name="free_product_id" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-amber-500 text-sm bg-white">
-                        <option value="">-- Choose Free Product --</option>
-                        @if(isset($allProducts))
-                            @foreach($allProducts as $pItem)
-                                <option value="{{ $pItem->id }}">{{ ($pItem->brand->name ?? '') . ' ' . $pItem->model }} (Stock: {{ $pItem->stock }})</option>
+                <div id="field_free_product" class="hidden bg-amber-50/60 p-4 rounded-xl border border-amber-200/80 space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                            <span class="text-amber-600">📁</span> Select Gift Category / গিফটের ক্যাটাগরি
+                        </label>
+                        <select id="so_free_gift_category_id" onchange="filterFreeGiftProductsByCategory(this.value)" class="w-full bg-white border border-amber-300 rounded-xl px-3.5 py-2 text-xs font-semibold focus:ring-2 focus:ring-amber-500">
+                            <option value="">-- All Gift Categories / ক্যাটাগরি বেছে নিন --</option>
+                            @foreach($categories as $cat)
+                                <option value="{{ $cat->id }}">{{ $cat->name }}</option>
                             @endforeach
-                        @endif
-                    </select>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                            <span class="text-amber-600">🎁</span> Select Free Product Gift / ফ্রি গিফট প্রোডাক্ট
+                        </label>
+                        <select id="so_free_product_id" name="free_product_id" class="w-full bg-white border border-amber-300 rounded-xl px-3 py-2.5 text-xs font-semibold focus:ring-2 focus:ring-amber-500">
+                            <option value="">-- Choose Free Product / গিফট আইটেম বেছে নিন --</option>
+                            @if(isset($allProducts))
+                                @foreach($allProducts as $pItem)
+                                    <option value="{{ $pItem->id }}" data-category="{{ $pItem->category_id }}">
+                                        {{ $pItem->category->name ?? '' }} • {{ ($pItem->brand->name ?? '') . ' ' . $pItem->model }} (Stock: {{ $pItem->stock }})
+                                    </option>
+                                @endforeach
+                            @endif
+                        </select>
+                    </div>
                 </div>
 
                 <!-- 3. Duration & Dates -->
@@ -829,6 +887,66 @@
             }
         }
 
+        function filterFreeGiftProductsByCategory(categoryId) {
+            const select = document.getElementById('so_free_product_id');
+            if (!select) return;
+            const options = select.querySelectorAll('option');
+            options.forEach(opt => {
+                if (!opt.value) return;
+                const cat = opt.getAttribute('data-category');
+                if (!categoryId || cat == categoryId) {
+                    opt.style.display = '';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+            const currentSelected = select.options[select.selectedIndex];
+            if (currentSelected && currentSelected.value && currentSelected.style.display === 'none') {
+                select.value = '';
+            }
+        }
+
+        function filterSoProductSelect(categoryId) {
+            const select = document.getElementById('so_product_select');
+            if (!select) return;
+            const options = select.querySelectorAll('option');
+            options.forEach(opt => {
+                if (!opt.value) return;
+                const cat = opt.getAttribute('data-category');
+                if (!categoryId || cat == categoryId) {
+                    opt.style.display = '';
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+            const currentSelected = select.options[select.selectedIndex];
+            if (currentSelected && currentSelected.value && currentSelected.style.display === 'none') {
+                select.value = '';
+                document.getElementById('so_product_id').value = '';
+            }
+        }
+
+        function onSoProductSelectChange(productId) {
+            if (!productId) {
+                document.getElementById('so_product_id').value = '';
+                document.getElementById('soModalProductName').innerText = '';
+                return;
+            }
+            document.getElementById('so_product_id').value = productId;
+            const select = document.getElementById('so_product_select');
+            const opt = select.options[select.selectedIndex];
+            if (opt) {
+                const brand = opt.getAttribute('data-brand') || '';
+                const model = opt.getAttribute('data-model') || '';
+                const price = parseFloat(opt.getAttribute('data-price')) || 0;
+                const catId = opt.getAttribute('data-category');
+                if (catId && !document.getElementById('so_category_id').value) {
+                    document.getElementById('so_category_id').value = catId;
+                }
+                openSpecialOfferModal(productId, `${brand} ${model}`, price);
+            }
+        }
+
         function openSpecialOfferModal(productId, productName, sellingPrice = 0) {
             hideSoFormAlert();
             const modal = document.getElementById('specialOfferModal');
@@ -839,7 +957,27 @@
             }
 
             currentSellingPrice = parseFloat(sellingPrice) || 0;
-            document.getElementById('so_product_id').value = productId;
+            document.getElementById('so_product_id').value = productId || '';
+            
+            const selectedBar = document.getElementById('so_selected_product_bar');
+            const topSelectBlock = document.getElementById('so_top_select_block');
+            const productSelect = document.getElementById('so_product_select');
+
+            if (productId) {
+                if (selectedBar) selectedBar.classList.remove('hidden');
+                if (topSelectBlock) topSelectBlock.classList.add('hidden');
+                const mainTitleElem = document.getElementById('so_main_product_title');
+                if (mainTitleElem) mainTitleElem.innerText = productName + (currentSellingPrice > 0 ? ` (₹${currentSellingPrice})` : '');
+                if (productSelect) {
+                    productSelect.required = false;
+                    productSelect.value = productId;
+                }
+            } else {
+                if (selectedBar) selectedBar.classList.add('hidden');
+                if (topSelectBlock) topSelectBlock.classList.remove('hidden');
+                if (productSelect) productSelect.required = true;
+            }
+
             document.getElementById('soModalProductName').innerText = productName + (currentSellingPrice > 0 ? ` (Selling Price: ₹${currentSellingPrice})` : '');
             document.getElementById('btnSubmitSpecialOffer').innerText = 'Save Offer';
             

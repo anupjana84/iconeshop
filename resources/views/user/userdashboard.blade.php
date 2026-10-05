@@ -301,21 +301,114 @@
             color: #1e293b;
         }
 
-        .order-row {
+        .order-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        .order-card-header {
+            background: #f8fafc;
+            padding: 14px 18px;
+            border-bottom: 1px solid #e2e8f0;
             display: flex;
             justify-content: space-between;
-            gap: 20px;
-            padding: 15px 0;
-            border-top: 1px solid #e5e7eb;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
-        .order-row div {
+        .order-card-header .order-info {
             display: flex;
-            flex-direction: column;
-            gap: 5px;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
         }
 
-        .order-row span,
+        .order-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: capitalize;
+        }
+
+        .status-pending { background: #fef3c7; color: #d97706; }
+        .status-delivered { background: #dcfce7; color: #15803d; }
+        .status-processing { background: #dbeafe; color: #1d4ed8; }
+        .status-cancelled { background: #fee2e2; color: #b91c1c; }
+
+        .order-items-list {
+            padding: 10px 18px;
+        }
+
+        .order-item-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 14px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .order-item-row:last-child {
+            border-bottom: none;
+        }
+
+        .order-item-img {
+            width: 65px;
+            height: 65px;
+            border-radius: 10px;
+            object-fit: contain;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 4px;
+            flex-shrink: 0;
+        }
+
+        .order-item-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .order-item-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 5px;
+        }
+
+        .order-item-meta {
+            font-size: 13px;
+            color: #64748b;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .order-item-price {
+            font-size: 16px;
+            font-weight: 800;
+            color: #059669;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .order-card-footer {
+            background: #f8fafc;
+            padding: 12px 18px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 14px;
+        }
+
         .empty-orders,
         .empty-rewards {
             color: #6b7280;
@@ -371,7 +464,12 @@
 
     <!-- FIXED NAVBAR -->
     <div class="navbar">
-        <h2>User Dashboard</h2>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <a href="{{ route('home') }}" style="color: white; text-decoration: none; font-size: 14px; font-weight: 600; background: rgba(255, 255, 255, 0.2); padding: 8px 14px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px;">
+                <span>🛒</span> <span>Visit Store</span>
+            </a>
+            <h2>User Dashboard</h2>
+        </div>
 
         <form action="{{ route('logout') }}" method="POST" class="logout">
             @csrf
@@ -385,6 +483,7 @@
     <div class="page-layout">
         <!-- FIXED SIDEBAR -->
         <aside class="side-menu" aria-label="User menu">
+            <a href="{{ route('home') }}" style="background: #16a34a; font-weight: bold; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">🛒 Shop / Home</a>
             <a data-tab="overview" class="tab-link active">🏠 Overview</a>
             <a data-tab="rewards" class="tab-link">🏆 My Rewards</a>
             <a data-tab="orders" class="tab-link">📦 My Orders</a>
@@ -397,10 +496,20 @@
             <div id="tab-overview" class="tab-content active">
                 <div class="welcome">
                     <h2>Welcome, {{ auth()->user()->name ?? 'Customer' }}! 👋</h2>
-                    <p>📱 Phone: {{ auth()->user()->phone ?? 'N/A' }}</p>
+                    <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px; color: #475569; font-size: 14px; font-weight: 500;">
+                        <span>👤 <strong>Name:</strong> {{ auth()->user()->name ?? 'N/A' }}</span>
+                        <span>📧 <strong>Email:</strong> {{ auth()->user()->email ?? 'N/A' }}</span>
+                        <span>📱 <strong>Phone:</strong> {{ auth()->user()->phone ?? 'N/A' }}</span>
+                    </div>
                 </div>
 
                 <div class="cards">
+                    <div class="card" style="border-top: 4px solid #16a34a;">
+                        <h3>🛒 Place New Order</h3>
+                        <p style="color: #64748b; font-size: 14px; margin: 6px 0 12px 0;">Browse products on homepage and order easily.</p>
+                        <a href="{{ route('home') }}" style="color: #16a34a; font-weight: 700;">Go to Store →</a>
+                    </div>
+
                     <div class="card" style="border-top: 4px solid #10b981;">
                         <h3>🏆 Reward Points</h3>
                         <p style="font-size: 26px; font-weight: 800; color: #059669; margin: 6px 0;">
@@ -516,14 +625,68 @@
                     <h2>📦 My Orders</h2>
 
                     @forelse ($orders as $order)
-                        <div class="order-row">
-                            <div>
-                                <strong>Order #{{ $order->id }}</strong>
-                                <span>{{ $order->created_at->format('d M Y, h:i A') }}</span>
+                        <div class="order-card">
+                            <div class="order-card-header">
+                                <div class="order-info">
+                                    <strong style="font-size: 16px; color: #1e293b;">Order #{{ $order->id }}</strong>
+                                    <span style="color: #64748b; font-size: 13px;">📅 {{ $order->created_at ? $order->created_at->format('d M Y, h:i A') : 'N/A' }}</span>
+                                </div>
+                                <div>
+                                    @php
+                                        $st = strtolower($order->order_status ?? 'pending');
+                                        $statusClass = 'status-pending';
+                                        if (in_array($st, ['delivered', 'completed'])) $statusClass = 'status-delivered';
+                                        elseif (in_array($st, ['processing', 'shipped', 'dispatch'])) $statusClass = 'status-processing';
+                                        elseif (in_array($st, ['cancelled', 'cancel', 'failed'])) $statusClass = 'status-cancelled';
+                                    @endphp
+                                    <span class="order-badge {{ $statusClass }}">{{ ucfirst($order->order_status ?? 'Pending') }}</span>
+                                </div>
                             </div>
-                            <div>
-                                <strong>{{ ucfirst($order->order_status) }}</strong>
-                                <span>{{ $order->orderItems->sum('quantity') }} item(s)</span>
+
+                            <div class="order-items-list">
+                                @php $orderGrandTotal = 0; @endphp
+                                @foreach($order->orderItems as $item)
+                                    @php
+                                        $product = $item->product;
+                                        $pd = $product->details ?? null;
+                                        $thumb = $pd->thumbnail_image ?? null;
+                                        $productName = $product ? trim(($product->category->name ?? '') . ' ' . ($product->brand->name ?? '') . ' ' . $product->model) : 'Product Item';
+                                        $itemTotal = $item->total ?? (($item->price * $item->quantity) + ($item->delivery_charges ?? 0));
+                                        $orderGrandTotal += $itemTotal;
+                                    @endphp
+                                    <div class="order-item-row">
+                                        @if($thumb)
+                                            <img src="{{ $thumb }}" alt="{{ $productName }}" class="order-item-img">
+                                        @else
+                                            <div class="order-item-img" style="display:flex;align-items:center;justify-content:center;font-size:24px;">📦</div>
+                                        @endif
+                                        <div class="order-item-details">
+                                            <div class="order-item-title">{{ $productName }}</div>
+                                            <div class="order-item-meta">
+                                                <span>Qty: <strong>{{ $item->quantity }}</strong></span>
+                                                <span>Price: <strong>₹{{ number_format($item->price, 2) }}</strong></span>
+                                                @if(($item->delivery_charges ?? 0) > 0)
+                                                    <span>Delivery: <strong>₹{{ number_format($item->delivery_charges, 2) }}</strong></span>
+                                                @endif
+                                                @if($item->price == 0)
+                                                    <span style="color: #d97706; font-weight: 700;">🎁 Free Gift</span>
+                                                @endif
+                                            </div>
+                                        </div>
+                                        <div class="order-item-price">
+                                            ₹{{ number_format($itemTotal, 2) }}
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            <div class="order-card-footer">
+                                <span style="color: #64748b; font-weight: 500;">
+                                    Total Items: <strong>{{ $order->orderItems->sum('quantity') }}</strong>
+                                </span>
+                                <span style="font-size: 16px; font-weight: 800; color: #1e293b;">
+                                    Grand Total: <strong style="color: #2563eb;">₹{{ number_format($orderGrandTotal, 2) }}</strong>
+                                </span>
                             </div>
                         </div>
                     @empty

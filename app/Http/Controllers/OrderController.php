@@ -27,28 +27,41 @@ class OrderController extends Controller
         $filter = null;
         $search = $request['search'] ?? "";
 
-        if ($search) {
+        $relations = ['customer', 'dealer', 'orderItems.product.category', 'orderItems.product.brand', 'orderItems.product.specialOffer.freeProduct', 'orderItems.product.freeProduct'];
 
-            $order = Order::whereHas('customer', function ($query) use ($search) {
-                $query->where('name', 'LIKE', "%$search%")
-                    ->orWhere('phone', 'LIKE', "%$search%")
-                    ->orWhere('wpnumber', 'LIKE', "%$search%")
-                    ->orWhere('address', 'LIKE', "%$search%")
-                    ->orWhere('state', 'LIKE', "%$search%")
-                    ->orWhere('pin', 'LIKE', "%$search%");
-            })
+        if ($search) {
+            $order = Order::with($relations)
+                ->where(function ($query) use ($search) {
+                    $query->whereHas('customer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%")
+                            ->orWhere('address', 'LIKE', "%$search%")
+                            ->orWhere('state', 'LIKE', "%$search%")
+                            ->orWhere('pin', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('dealer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('orderItems.product', function ($q) use ($search) {
+                        $q->where('code', 'LIKE', "%$search%")
+                            ->orWhere('model', 'LIKE', "%$search%");
+                    });
+                })
                 ->latest()
                 ->paginate(20)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'search', 'page_title', 'filter');
 
         } else {
 
-            $order = Order::with('customer', 'orderItems')
+            $order = Order::with($relations)
                 ->latest()
                 ->paginate(15)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'page_title', 'filter');
         }
@@ -62,30 +75,44 @@ class OrderController extends Controller
         $filter = "Pending";
         $search = $request['search'] ?? "";
 
+        $relations = ['customer', 'dealer', 'orderItems.product.category', 'orderItems.product.brand', 'orderItems.product.specialOffer.freeProduct', 'orderItems.product.freeProduct'];
+
         if ($search) {
 
-            $order = Order::where('order_status', 'pending')
-                ->whereHas('customer', function ($query) use ($search) {
-                    $query->where('name', 'LIKE', "%$search%")
-                        ->orWhere('phone', 'LIKE', "%$search%")
-                        ->orWhere('wpnumber', 'LIKE', "%$search%")
-                        ->orWhere('address', 'LIKE', "%$search%")
-                        ->orWhere('state', 'LIKE', "%$search%")
-                        ->orWhere('pin', 'LIKE', "%$search%");
+            $order = Order::with($relations)
+                ->where('order_status', 'pending')
+                ->where(function ($query) use ($search) {
+                    $query->whereHas('customer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%")
+                            ->orWhere('address', 'LIKE', "%$search%")
+                            ->orWhere('state', 'LIKE', "%$search%")
+                            ->orWhere('pin', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('dealer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('orderItems.product', function ($q) use ($search) {
+                        $q->where('code', 'LIKE', "%$search%")
+                            ->orWhere('model', 'LIKE', "%$search%");
+                    });
                 })
                 ->latest()
                 ->paginate(20)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'search', 'page_title', 'filter');
 
         } else {
 
-            $order = Order::with('customer', 'orderItems')
+            $order = Order::with($relations)
                 ->where('order_status', 'pending')
                 ->latest()
                 ->paginate(15)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'page_title', 'filter');
         }
@@ -99,30 +126,44 @@ class OrderController extends Controller
         $filter = "Delivered";
         $search = $request['search'] ?? "";
 
+        $relations = ['customer', 'dealer', 'orderItems.product.category', 'orderItems.product.brand', 'orderItems.product.specialOffer.freeProduct', 'orderItems.product.freeProduct'];
+
         if ($search) {
 
-            $order = Order::where('order_status', 'delivered')
-                ->whereHas('customer', function ($query) use ($search) {
-                    $query->where('name', 'LIKE', "%$search%")
-                        ->orWhere('phone', 'LIKE', "%$search%")
-                        ->orWhere('wpnumber', 'LIKE', "%$search%")
-                        ->orWhere('address', 'LIKE', "%$search%")
-                        ->orWhere('state', 'LIKE', "%$search%")
-                        ->orWhere('pin', 'LIKE', "%$search%");
+            $order = Order::with($relations)
+                ->where('order_status', 'delivered')
+                ->where(function ($query) use ($search) {
+                    $query->whereHas('customer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%")
+                            ->orWhere('address', 'LIKE', "%$search%")
+                            ->orWhere('state', 'LIKE', "%$search%")
+                            ->orWhere('pin', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('dealer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('orderItems.product', function ($q) use ($search) {
+                        $q->where('code', 'LIKE', "%$search%")
+                            ->orWhere('model', 'LIKE', "%$search%");
+                    });
                 })
                 ->latest()
                 ->paginate(20)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'search', 'page_title', 'filter');
 
         } else {
 
-            $order = Order::with('customer', 'orderItems')
+            $order = Order::with($relations)
                 ->where('order_status', 'delivered')
                 ->latest()
                 ->paginate(15)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'page_title', 'filter');
         }
@@ -136,30 +177,44 @@ class OrderController extends Controller
         $filter = "Canceled";
         $search = $request['search'] ?? "";
 
+        $relations = ['customer', 'dealer', 'orderItems.product.category', 'orderItems.product.brand', 'orderItems.product.specialOffer.freeProduct', 'orderItems.product.freeProduct'];
+
         if ($search) {
 
-            $order = Order::where('order_status', 'canceled')
-                ->whereHas('customer', function ($query) use ($search) {
-                    $query->where('name', 'LIKE', "%$search%")
-                        ->orWhere('phone', 'LIKE', "%$search%")
-                        ->orWhere('wpnumber', 'LIKE', "%$search%")
-                        ->orWhere('address', 'LIKE', "%$search%")
-                        ->orWhere('state', 'LIKE', "%$search%")
-                        ->orWhere('pin', 'LIKE', "%$search%");
+            $order = Order::with($relations)
+                ->where('order_status', 'canceled')
+                ->where(function ($query) use ($search) {
+                    $query->whereHas('customer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%")
+                            ->orWhere('address', 'LIKE', "%$search%")
+                            ->orWhere('state', 'LIKE', "%$search%")
+                            ->orWhere('pin', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('dealer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('orderItems.product', function ($q) use ($search) {
+                        $q->where('code', 'LIKE', "%$search%")
+                            ->orWhere('model', 'LIKE', "%$search%");
+                    });
                 })
                 ->latest()
                 ->paginate(20)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'search', 'page_title', 'filter');
 
         } else {
 
-            $order = Order::with('customer', 'orderItems')
+            $order = Order::with($relations)
                 ->where('order_status', 'canceled')
                 ->latest()
                 ->paginate(15)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'page_title', 'filter');
         }
@@ -173,28 +228,37 @@ class OrderController extends Controller
         $filter = "Cash Order";
         $search = $request['search'] ?? "";
 
+        $relations = ['dealer', 'orderItems.product.category', 'orderItems.product.brand', 'orderItems.product.specialOffer.freeProduct', 'orderItems.product.freeProduct'];
+
         if ($search) {
 
-            $order = Order::whereNull('customer_id')
-                ->whereHas('salesman', function ($query) use ($search) {
-                    $query->where('name', 'LIKE', "%$search%")
-                        ->orWhere('phone', 'LIKE', "%$search%")
-                        ->orWhere('wpnumber', 'LIKE', "%$search%");
+            $order = Order::with($relations)
+                ->whereNull('customer_id')
+                ->where(function ($query) use ($search) {
+                    $query->whereHas('dealer', function ($q) use ($search) {
+                        $q->where('name', 'LIKE', "%$search%")
+                            ->orWhere('phone', 'LIKE', "%$search%")
+                            ->orWhere('wpnumber', 'LIKE', "%$search%");
+                    })
+                    ->orWhereHas('orderItems.product', function ($q) use ($search) {
+                        $q->where('code', 'LIKE', "%$search%")
+                            ->orWhere('model', 'LIKE', "%$search%");
+                    });
                 })
                 ->latest()
                 ->paginate(20)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'search', 'page_title', 'filter');
 
         } else {
 
-            $order = Order::with('orderItems')
+            $order = Order::with($relations)
                 ->whereNull('customer_id')
                 ->orderBy('order_status', 'desc')
                 ->latest()
                 ->paginate(15)
-                ->withQueryString(); // 🔥 ADDED
+                ->withQueryString();
 
             $data = compact('order', 'page_title', 'filter');
         }
@@ -251,7 +315,7 @@ class OrderController extends Controller
             }
 
             $banks = Bank::orderBy('name')->get();
-            $order_item = OrderItem::with(['product', 'product.category', 'product.brand'])->where('order_id', $id)->get();
+            $order_item = OrderItem::with(['product.specialOffer.freeProduct', 'product.category', 'product.brand'])->where('order_id', $id)->get();
             $data = compact('order', 'order_item', 'page_title', 'finances', 'banks', 'rewardBalance', 'rewardMobile');
             return view('admin.order.orderPlace')->with($data);
         } else {
@@ -264,7 +328,7 @@ class OrderController extends Controller
         if ($order->order_status == 'pending') {
             $page_title = 'Process Direct Order';
             $banks = Bank::orderBy('name')->get();
-            $order_item = OrderItem::with(['product', 'product.category', 'product.brand'])->where('order_id', $id)->get();
+            $order_item = OrderItem::with(['product.specialOffer.freeProduct', 'product.category', 'product.brand'])->where('order_id', $id)->get();
             $data = compact('order', 'order_item', 'page_title', 'banks');
             return view('admin.order.directOrderPlace')->with($data);
         } else {

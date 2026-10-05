@@ -878,9 +878,11 @@ public function bulkPriceUpdate(Request $request)
     public function getSpecialOffer($productId)
     {
         $offer = SpecialOffer::with('freeProduct.brand')->where('product_id', $productId)->first();
+        $product = Product::with(['category', 'brand'])->find($productId);
         return response()->json([
             'success' => true,
-            'offer' => $offer
+            'offer' => $offer,
+            'product' => $product
         ]);
     }
 
@@ -1035,5 +1037,55 @@ public function bulkPriceUpdate(Request $request)
                 'message' => 'Error removing offer: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    public function specialOffersList(Request $request)
+    {
+        $page_title = 'Special Offer Products';
+
+        $categories = Category::orderBy('name', 'asc')->get();
+        $brands = Brand::orderBy('name', 'asc')->get();
+
+        $query = Product::with(['details', 'category', 'brand', 'specialOffer.freeProduct.brand', 'freeProduct.brand'])
+            ->where(function ($q) {
+                $q->where('special_offer', 'yes')
+                  ->orWhereHas('specialOffer');
+            });
+
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->where('brand_id', $request->brand_id);
+        }
+
+        if ($request->filled('search')) {
+            $term = trim($request->search);
+            $query->where(function ($q) use ($term) {
+                $q->where('model', 'like', "%{$term}%")
+                  ->orWhereHas('brand', function ($b) use ($term) {
+                      $b->where('name', 'like', "%{$term}%");
+                  })
+                  ->orWhereHas('category', function ($c) use ($term) {
+                      $c->where('name', 'like', "%{$term}%");
+                  });
+            });
+        }
+
+        $products = $query->latest()->paginate(20)->withQueryString();
+
+        $allProducts = Product::select('id', 'model', 'brand_id', 'category_id', 'online_price', 'sale_price', 'stock')
+            ->with(['brand:id,name', 'category:id,name'])
+            ->orderBy('model', 'asc')
+            ->get();
+
+        return view('admin.product.specialOffersList', compact(
+            'page_title',
+            'products',
+            'categories',
+            'brands',
+            'allProducts'
+        ));
     }
 }

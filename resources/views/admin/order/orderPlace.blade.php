@@ -118,7 +118,37 @@
                                     </td>
                                     <td class="px-3 py-2 font-semibold">{{ $item->product->category->name }}</td>
                                     <td class="px-3 py-2">{{ $item->product->brand->name }}</td>
-                                    <td class="px-3 py-2">{{ $item->product->model }}</td>
+                                    <td class="px-3 py-2">
+                                        <span class="font-bold text-gray-900 block">{{ $item->product->model }}</span>
+                                        @if (!empty($item->product->code))
+                                            <span class="inline-block font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-xs mt-0.5">
+                                                Code: {{ $item->product->code }}
+                                            </span>
+                                        @endif
+                                        @php
+                                            $so = $item->product->specialOffer ?? null;
+                                            $soActive = $so && $so->isCurrentlyActive();
+                                        @endphp
+                                        @if($soActive)
+                                            @if($so->offer_type === 'flat')
+                                                <span class="inline-flex items-center gap-1 text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md mt-1">
+                                                    ⚡ Special Offer: ₹{{ number_format($so->flat_discount, 0) }} FLAT OFF
+                                                </span>
+                                            @elseif($so->offer_type === 'percentage')
+                                                <span class="inline-flex items-center gap-1 text-[11px] font-black bg-purple-100 text-purple-900 border border-purple-300 px-2 py-0.5 rounded-md mt-1">
+                                                    ⚡ Special Offer: {{ $so->percentage_discount }}% OFF
+                                                </span>
+                                            @elseif($so->offer_type === 'free_product' && $so->freeProduct)
+                                                <span class="inline-flex items-center gap-1 text-[11px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-md mt-1">
+                                                    🎁 Free Gift: {{ $so->freeProduct->brand->name ?? '' }} {{ $so->freeProduct->model }}
+                                                </span>
+                                            @endif
+                                        @elseif(!empty($item->product->free_gift))
+                                            <span class="inline-flex items-center gap-1 text-[11px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-md mt-1">
+                                                🎁 Free Gift: {{ $item->product->free_gift }}
+                                            </span>
+                                        @endif
+                                    </td>
                                     <td class="px-3 py-2">{{ $item->gst }}%</td>
                                     <td class="px-3 py-2">
                                         <input type="number" name="quantity[]" value="{{ $item->quantity }}" min="1"
